@@ -1,6 +1,20 @@
 import { vehicleImageRules } from './rules'
 import { MatchedVehicleImage, VehicleImageLookupInput, VehicleImageRule } from './types'
 
+const imageNames: Record<string, string> = { nline: 'N Line', xrt: 'XRT' }
+
+export const vehicleImages = [...new Set(vehicleImageRules.flatMap((rule) => (rule.imageUrl ? [rule.imageUrl] : [])))]
+  .map((url) => {
+    const [year, fileName] = url.split('/').slice(-2) as [string, string]
+    const name = fileName
+      .replace(/\.png$/, '')
+      .split('-')
+      .map((word) => imageNames[word] || word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ')
+    return { id: `${year}/${fileName}`, name, year, url }
+  })
+  .sort((a, b) => b.year.localeCompare(a.year) || a.name.localeCompare(b.name))
+
 const normalize = (value: string | undefined): string => {
   return (value ?? '').toLocaleLowerCase().replace(/[^a-z0-9]+/g, '')
 }
@@ -48,7 +62,18 @@ const matchesRule = (rule: VehicleImageRule, lookup: VehicleImageLookupInput): b
   return true
 }
 
-export const resolveVehicleImage = (lookup: VehicleImageLookupInput): MatchedVehicleImage | undefined => {
+export const resolveVehicleImage = (
+  lookup: VehicleImageLookupInput,
+  selectedId?: string,
+): MatchedVehicleImage | undefined => {
+  const selectedImage = vehicleImages.find((image) => image.id === selectedId)
+  if (selectedImage) {
+    return {
+      ruleId: `selected-${selectedImage.id}`,
+      cacheKey: `vehicle-image-${selectedImage.id.replace('/', '-')}`,
+      imageUrl: selectedImage.url,
+    }
+  }
   const matchedRule = vehicleImageRules.find((rule) => matchesRule(rule, lookup))
   if (!matchedRule) return undefined
 

@@ -895,15 +895,18 @@ export class Bluelink {
     const fs = FileManager.local()
     const requestedColorForOverride = retryOriginalColour
     const inferredTrim = inferVehicleTrimLabel(this.cache.car.modelName, this.cache.car.modelTrim)
-    const vehicleImageOverride = resolveVehicleImage({
-      manufacturer: this.config.manufacturer,
-      modelName: this.cache.car.modelName,
-      modelYear: this.cache.car.modelYear,
-      modelTrim: this.cache.car.modelTrim,
-      trimHint: inferredTrim,
-      modelColour: this.cache.car.modelColour,
-      requestedColor: requestedColorForOverride,
-    })
+    const vehicleImageOverride = resolveVehicleImage(
+      {
+        manufacturer: this.config.manufacturer,
+        modelName: this.cache.car.modelName,
+        modelYear: this.cache.car.modelYear,
+        modelTrim: this.cache.car.modelTrim,
+        trimHint: inferredTrim,
+        modelColour: this.cache.car.modelColour,
+        requestedColor: requestedColorForOverride,
+      },
+      this.config.vehicleImageId,
+    )
     if (vehicleImageOverride) {
       const localOverridePath = `${fs.libraryDirectory()}/${vehicleImageOverride.cacheKey}`
       if (!forceRefresh && fs.fileExists(localOverridePath)) {

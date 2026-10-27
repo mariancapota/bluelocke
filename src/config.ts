@@ -1,5 +1,6 @@
 import { Bluelink, ClimateRequest } from 'lib/bluelink-regions/base'
 import { form, confirm, quickOptions, destructiveConfirm } from './lib/scriptable-utils'
+import { pickVehicleImage } from './vehicle-image-picker'
 
 const KEYCHAIN_BLUELINK_CONFIG_KEY = 'egmp-bluelink-config'
 
@@ -77,6 +78,7 @@ export interface Config {
   manufacturer: string
   auth: Auth
   displayNameOverride: string
+  vehicleImageId: string
   vehicleTypeOverride: VehicleTypeOverride
   standardClimateConfig: StandardClimateConfig
   tempType: 'C' | 'F'
@@ -112,6 +114,7 @@ export interface FlattenedConfig {
   pin: string
   region: string
   displayNameOverride: string
+  vehicleImageId: string
   vehicleTypeOverride: VehicleTypeOverride
   standardClimateConfig: StandardClimateConfig
   tempType: 'C' | 'F'
@@ -134,6 +137,7 @@ export interface FlattenedConfig {
 interface CarSettingsConfig {
   displayNameOverride: string
   vehicleTypeOverride: VehicleTypeOverride
+  vehicleImage: boolean
 }
 
 interface ClimateSettingsForm {
@@ -144,6 +148,7 @@ interface ClimateSettingsForm {
 type MainConfigForm = Omit<
   FlattenedConfig,
   | 'displayNameOverride'
+  | 'vehicleImageId'
   | 'vehicleTypeOverride'
   | 'standardClimateConfig'
   | 'climateTempWarm'
@@ -201,6 +206,7 @@ const DEFAULT_CONFIG = {
     region: '',
   },
   displayNameOverride: '',
+  vehicleImageId: '',
   vehicleTypeOverride: 'auto',
   standardClimateConfig: getDefaultStandardClimateConfig('C'),
   tempType: 'C',
@@ -526,7 +532,7 @@ export async function loadConfigScreen(bl: Bluelink | undefined = undefined) {
         customIcon: 'car',
         faded: true,
         onClickFunction: () => {
-          loadCarSettingsScreen()
+          loadCarSettingsScreen(bl)
         },
       },
       climateSettings: {
@@ -643,7 +649,7 @@ export async function loadConfigScreen(bl: Bluelink | undefined = undefined) {
   })
 }
 
-export async function loadCarSettingsScreen() {
+export async function loadCarSettingsScreen(bl?: Bluelink) {
   const config = getConfig()
   return await form<CarSettingsConfig>({
     title: 'Car Settings',
@@ -661,6 +667,18 @@ export async function loadCarSettingsScreen() {
     },
     submitButtonText: 'Save',
     fields: {
+      vehicleImage: {
+        type: 'clickable',
+        label: 'Vehicle Image',
+        customIcon: 'car',
+        faded: true,
+        onClickFunction: async () => {
+          const selection = await pickVehicleImage(getConfig().vehicleImageId)
+          if (selection === undefined) return
+          setConfig({ ...getConfig(), vehicleImageId: selection })
+          if (bl) bl.getConfig().vehicleImageId = selection
+        },
+      },
       displayNameOverride: {
         type: 'textInput',
         label: 'Vehicle Name Override (optional)',
@@ -677,6 +695,7 @@ export async function loadCarSettingsScreen() {
   })({
     displayNameOverride: config.displayNameOverride || '',
     vehicleTypeOverride: config.vehicleTypeOverride || 'auto',
+    vehicleImage: false,
   })
 }
 
