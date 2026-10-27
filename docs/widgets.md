@@ -27,6 +27,8 @@ The screenshots below show the white and dark widget styles:
 
 ## Home Screen Widgets
 
+Choose a vehicle image in `Settings → Car Settings → Vehicle Image`. The selector previews the images included in the repository, grouped by model year. Your choice is used in the app and widgets. Select `Automatic` to return to matching the vehicle details.
+
 Bluelocke currently supports:
 
 - `Medium` widget

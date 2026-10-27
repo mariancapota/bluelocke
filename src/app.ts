@@ -193,8 +193,9 @@ const settings = (bl: Bluelink) => {
       }),
     ],
     {
-      onTap: () => {
-        loadConfigScreen(bl)
+      onTap: async () => {
+        await loadConfigScreen(bl)
+        setState({ appIcon: await bl.getCarImage() })
       },
       onTripleTap() {
         quickOptions(['Share Debug Logs', 'Reset All Settings', 'Downgrade to Previous Version', 'Cancel'], {
