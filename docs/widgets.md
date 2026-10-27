@@ -35,8 +35,7 @@ Bluelocke currently supports:
 
 The medium widget gives a fuller snapshot:
 
-- Vehicle name at the top
-- Vehicle image in the center
+- Vehicle image
 - Main energy/range area:
   - EV/PHEV: battery level + range
   - ICE/HEV: fuel level + range
@@ -44,11 +43,16 @@ The medium widget gives a fuller snapshot:
   - Odometer (mileage)
   - Last updated time
   - 12V battery level
+- Shortcuts for locking, refreshing vehicle status and unlocking
 
 For ICE/HEV vehicles, the medium widget now shows:
 
-- `Fuel x%` in larger text
-- `~ range` in larger text below it
+- Fuel percentage, such as `41%`
+- Range below it, such as `281 km`
+
+Tapping a shortcut opens Scriptable and runs the command, with progress and the result shown in Bluelocke. Window controls are not supported.
+
+The medium widget uses blue symbols for its shortcuts, fuel and last-update indicators in both light and dark appearances. These avoid the white symbols that disappear with Clear/Tinted Home Screen styling. Battery symbols retain their status colors.
 
 ## Lock Screen Widgets
 

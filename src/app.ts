@@ -14,6 +14,7 @@ import { Version } from 'lib/version'
 import { deleteWidgetCache } from 'widget'
 import { getAppLogger, getSiriLogger } from './lib/util'
 import { getWidgetLogger } from 'widget'
+import { WidgetAction } from './widget-actions'
 import {
   sleep,
   loadTintedIcons,
@@ -81,13 +82,13 @@ function getDisplayName(car: Status['car']): string {
   return formatVehicleDisplayName(car, config.displayNameOverride)
 }
 
-export async function createApp(config: Config, bl: Bluelink) {
+export async function createApp(config: Config, bl: Bluelink, action?: WidgetAction) {
   await loadTintedIcons()
 
   // not blocking call - render UI with last cache and then update from a non forced remote call (i.e. to server but not to car)
   // if its been at least MIN_API_REFRESH_TIME milliseconds
   const cachedStatus = bl.getCachedStatus()
-  if (!cachedStatus || cachedStatus.status.lastStatusCheck < Date.now() + MIN_API_REFRESH_TIME) {
+  if (!action && (!cachedStatus || cachedStatus.status.lastStatusCheck < Date.now() + MIN_API_REFRESH_TIME)) {
     // non blocking refresh of Auth then status call
     bl.refreshAuth().then(async () => {
       bl.getStatus(false, true).then(async (status) => {
@@ -100,7 +101,7 @@ export async function createApp(config: Config, bl: Bluelink) {
   const appIcon = await bl.getCarImage()
 
   // async check if prompt for update is required on launch
-  if (config.promptForUpdate) {
+  if (!action && config.promptForUpdate) {
     const version = new Version('devindxdev', 'bluelocke')
     version.promptForUpdate().then((updateRequired: boolean) => {
       if (updateRequired) {
@@ -146,6 +147,17 @@ export async function createApp(config: Config, bl: Bluelink) {
       Spacer({ rowHeight: 150 }),
       settings(bl),
     ],
+    afterFirstRender: action
+      ? () =>
+          doAsyncUpdate({
+            ...action,
+            bl,
+            actions: undefined,
+            successCallback: (data) => {
+              updateStatus(action.command === 'status' ? data : { ...bl.getCachedStatus(), status: data })
+            },
+          })
+      : undefined,
   })
 }
 
