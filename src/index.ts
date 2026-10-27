@@ -14,6 +14,7 @@ import { getAppLogger, getSiriLogger } from './lib/util'
 import { processSiriRequest } from 'siri'
 import { getConfig, loadConfigScreen, configExists } from 'config'
 import { confirm, quickOptions } from './lib/scriptable-utils'
+import { getWidgetAction, getWidgetActionUrl } from './widget-actions'
 
 function getLoginFailureMessage(region: string, requiresForegroundAuth: boolean): string {
   if (region === 'canada') {
@@ -33,12 +34,14 @@ function getLoginFailureMessage(region: string, requiresForegroundAuth: boolean)
 
   const logger = getAppLogger()
   const blConfig = getConfig()
+  const widgetAction =
+    !config.runsInWidget && !config.runsWithSiri ? getWidgetAction(args.queryParameters.action) : undefined
   let bl = undefined
 
   // Init Bluelink - Deal with region exceptions if needed
   try {
     // main app handles refreshing auth in non blocking way
-    bl = await initRegionalBluelink(blConfig, config.runsWithSiri || config.runsInWidget ? true : false)
+    bl = await initRegionalBluelink(blConfig, config.runsWithSiri || config.runsInWidget || Boolean(widgetAction))
   } catch (e) {
     const error = e instanceof Error ? e.message : e
     const errorMessage = `Error Initalizing Bluelink: ${error}`
@@ -160,12 +163,12 @@ function getLoginFailureMessage(region: string, requiresForegroundAuth: boolean)
       // check if we need to restart script - needed to clear out any login webviews
       if (bl.needRestart()) {
         logger.log('Restarting script to clear webview')
-        const scriptUrl = URLScheme.forRunningScript()
+        const scriptUrl = widgetAction ? getWidgetActionUrl(widgetAction) : URLScheme.forRunningScript()
         Safari.open(scriptUrl)
         return
       }
 
-      const resp = await createApp(blConfig, bl)
+      const resp = await createApp(blConfig, bl, widgetAction)
       // @ts-ignore - undocumented api
       App.close() // add this back after dev
       Script.complete()

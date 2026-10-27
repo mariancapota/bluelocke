@@ -7,11 +7,11 @@ import {
   getChargeCompletionString,
   getChargingPowerString,
   sleep,
-  tintSFSymbol,
 } from './lib/util'
 import { Bluelink, Status } from './lib/bluelink-regions/base'
 import { Config } from 'config'
 import { Logger } from './lib/logger'
+import { getWidgetActionUrl, widgetActions } from './widget-actions'
 
 // Widget Config
 const DARK_BG_COLOR = '000000'
@@ -52,11 +52,6 @@ interface MediumWidgetGeometry {
   paddingLeft: number
   paddingBottom: number
   paddingRight: number
-  titleInset: number
-  titleFontSize: number
-  titleMinimumScaleFactor: number
-  titleRowHeight: number
-  titleBottomSpacer: number
   carImageWidth: number
   mediaRightSafetyInset: number
   contentRowHeight: number
@@ -80,6 +75,8 @@ interface MediumWidgetGeometry {
   footerGap: number
   footerIconSize: number
   footerFontSize: number
+  actionRowHeight: number
+  actionIconSize: number
 }
 
 interface MediumWidgetFooterLayout {
@@ -116,18 +113,13 @@ function getMediumWidgetGeometry(screenWidth: number): MediumWidgetGeometry {
 
   return {
     widgetWidth,
-    paddingTop: Math.round(interpolateMediumValue(widgetWidth, 20, 18, 18)),
+    paddingTop: Math.round(interpolateMediumValue(widgetWidth, 10, 10, 8)),
     paddingLeft: Math.round(interpolateMediumValue(widgetWidth, 5, 5, 5)),
-    paddingBottom: Math.round(interpolateMediumValue(widgetWidth, 20, 16, 16)),
+    paddingBottom: Math.round(interpolateMediumValue(widgetWidth, 10, 10, 8)),
     paddingRight: Math.round(interpolateMediumValue(widgetWidth, 15, 12, 12)),
-    titleInset: Math.round(interpolateMediumValue(widgetWidth, 8, 0, 0)),
-    titleFontSize: Math.round(interpolateMediumValue(widgetWidth, 25, 23, 22)),
-    titleMinimumScaleFactor: interpolateMediumValue(widgetWidth, 0.8, 0.72, 0.68),
-    titleRowHeight: Math.round(interpolateMediumValue(widgetWidth, 32, 30, 29)),
-    titleBottomSpacer: Math.round(interpolateMediumValue(widgetWidth, 2, 3, 3)),
     carImageWidth: Math.round(interpolateMediumValue(widgetWidth, 220, 176, 168)),
     mediaRightSafetyInset: Math.round(interpolateMediumValue(widgetWidth, 0, 8, 10)),
-    contentRowHeight: Math.round(interpolateMediumValue(widgetWidth, 100, 92, 90)),
+    contentRowHeight: Math.round(interpolateMediumValue(widgetWidth, 76, 70, 68)),
     statsColumnWidth: Math.round(interpolateMediumValue(widgetWidth, 125, 108, 102)),
     contentGap: Math.round(interpolateMediumValue(widgetWidth, 4, 3, 3)),
     batteryInfoTopSpacer: Math.round(interpolateMediumValue(widgetWidth, 10, 9, 8)),
@@ -140,14 +132,16 @@ function getMediumWidgetGeometry(screenWidth: number): MediumWidgetGeometry {
     chargingFontSize: Math.round(interpolateMediumValue(widgetWidth, 14, 12, 12)),
     batteryIconSize: interpolateMediumSize(widgetWidth, new Size(32, 24), new Size(30, 22), new Size(28, 21)),
     chargingIconSize: Math.round(interpolateMediumValue(widgetWidth, 28, 24, 23)),
-    footerTopSpacer: Math.round(interpolateMediumValue(widgetWidth, 8, 6, 6)),
+    footerTopSpacer: 4,
     footerLeadingInset: Math.round(interpolateMediumValue(widgetWidth, 0, 0, 0)),
     footerTrailingInset: Math.round(interpolateMediumValue(widgetWidth, 0, 4, 4)),
     footerGroupTargetWidth: Math.round(interpolateMediumValue(widgetWidth, 274, 236, 224)),
-    footerRowHeight: Math.round(interpolateMediumValue(widgetWidth, 24, 22, 22)),
+    footerRowHeight: Math.round(interpolateMediumValue(widgetWidth, 18, 16, 16)),
     footerGap: Math.round(interpolateMediumValue(widgetWidth, 5, 6, 6)),
     footerIconSize: Math.round(interpolateMediumValue(widgetWidth, 18, 15, 14)),
     footerFontSize: Math.round(interpolateMediumValue(widgetWidth, 12, 11, 10)),
+    actionRowHeight: Math.round(interpolateMediumValue(widgetWidth, 28, 26, 26)),
+    actionIconSize: Math.round(interpolateMediumValue(widgetWidth, 22, 20, 20)),
   }
 }
 
@@ -208,10 +202,11 @@ function getLockScreenBackgroundColor(): Color {
   return new Color('1C3E66', 0.45)
 }
 
-async function getWidgetIcon(iconKey: string, color: Color): Promise<Image> {
-  const iconName = getIconName(iconKey)
-  if (!iconName) return await getTintedIconAsync(iconKey)
-  return (await tintSFSymbol(iconName, SFSymbol.named(iconName).image, color)).image
+function addWidgetIcon(parent: WidgetStack, iconKey: string, color: Color): WidgetImage {
+  const iconName = getIconName(iconKey) || 'questionmark.app'
+  const icon = parent.addImage(SFSymbol.named(iconName).image)
+  icon.tintColor = color
+  return icon
 }
 
 function getEnergyPercent(status: Status, bl: Bluelink): number | undefined {
@@ -456,13 +451,12 @@ export async function createMediumWidget(config: Config, bl: Bluelink) {
   const refresh = await refreshDataForWidgetWithTimeout(bl, config)
   const status = refresh.status
   const primaryText = getPrimaryTextColor(config)
-  const darkMode = isDarkMode(config)
+  const iconTint = new Color('0A84FF')
   const screenWidth = Math.min(Device.screenSize().width, Device.screenSize().height)
   const profile = getMediumWidgetGeometry(screenWidth)
 
   // Prepare image
   const appIcon = await bl.getCarImage()
-  const title = bl.getVehicleDisplayName(status.car)
 
   // define widget and set date for when the next refresh should not occur before.
   const widget = new ListWidget()
@@ -490,7 +484,8 @@ export async function createMediumWidget(config: Config, bl: Bluelink) {
         : status.car.odometer
   const lastSeen = new Date(status.status.lastRemoteStatusCheck)
   const twelveSoc = status.status.twelveSoc
-  const rangeText = `~${status.status.range} ${bl.getDistanceUnit()}`
+  const rangeText = `${status.status.range} ${bl.getDistanceUnit()}`
+  const energyText = typeof energyPercent === 'number' ? `${energyPercent}%` : '--'
 
   const addSummaryCell = async (
     parent: WidgetStack,
@@ -503,15 +498,8 @@ export async function createMediumWidget(config: Config, bl: Bluelink) {
     cell.centerAlignContent()
     if (align === 'right') cell.addSpacer()
 
-    const iconColor =
-      icon === 'odometer'
-        ? new Color('#0A84FF')
-        : icon === 'twelve-volt'
-          ? twelveSoc > 70
-            ? Color.green()
-            : Color.red()
-          : primaryText
-    const img = cell.addImage(await getWidgetIcon(icon, iconColor))
+    const iconColor = icon === 'twelve-volt' ? (twelveSoc > 70 ? Color.green() : Color.red()) : iconTint
+    const img = addWidgetIcon(cell, icon, iconColor)
     img.imageSize = new Size(profile.footerIconSize, profile.footerIconSize)
     img.imageOpacity = 0.85
     cell.addSpacer(profile.footerGap)
@@ -572,24 +560,27 @@ export async function createMediumWidget(config: Config, bl: Bluelink) {
       metricGroup.centerAlignContent()
 
       const batteryIconColor = batteryPercent > 70 ? Color.green() : Color.red()
-      const batterySymbolElement = metricGroup.addImage(await getWidgetIcon('twelve-volt', batteryIconColor))
+      const batterySymbolElement = addWidgetIcon(metricGroup, 'twelve-volt', batteryIconColor)
       batterySymbolElement.imageSize = profile.batteryIconSize
       const chargingIcon = getChargingIcon(isCharging, isPluggedIn, true)
       if (chargingIcon) {
-        const chargingElement = metricGroup.addImage(await getTintedIconAsync(chargingIcon))
+        const chargingElement = addWidgetIcon(metricGroup, chargingIcon, Color.green())
         chargingElement.imageSize = new Size(profile.chargingIconSize, profile.chargingIconSize)
       }
 
       metricGroup.addSpacer(profile.footerGap)
 
-      const batteryPercentText = metricGroup.addText(getEnergyText(status, bl))
+      const batteryPercentText = metricGroup.addText(energyText)
       batteryPercentText.textColor =
         supportsCharging && typeof energyPercent === 'number' ? getBatteryPercentColor(energyPercent) : primaryText
       batteryPercentText.font = Font.semiboldSystemFont(profile.batteryPercentFontSize)
       batteryPercentText.minimumScaleFactor = 0.65
       batteryPercentText.lineLimit = 1
     } else {
-      const fuelText = batteryPercentStack.addText(getEnergyText(status, bl))
+      const fuelIcon = addWidgetIcon(batteryPercentStack, 'fuel', iconTint)
+      fuelIcon.imageSize = new Size(profile.rightMetricFontSize, profile.rightMetricFontSize)
+      batteryPercentStack.addSpacer(4)
+      const fuelText = batteryPercentStack.addText(energyText)
       fuelText.textColor = primaryText
       fuelText.font = Font.semiboldSystemFont(profile.rightMetricFontSize)
       fuelText.minimumScaleFactor = 0.65
@@ -619,9 +610,7 @@ export async function createMediumWidget(config: Config, bl: Bluelink) {
     chargingSpeedElement.rightAlignText()
     batteryChargingTimeStack.addSpacer(3)
 
-    const chargingTimeIconElement = batteryChargingTimeStack.addImage(
-      await getTintedIconAsync('charging-complete-widget'),
-    )
+    const chargingTimeIconElement = addWidgetIcon(batteryChargingTimeStack, 'charging-complete-widget', iconTint)
     chargingTimeIconElement.imageSize = new Size(profile.footerIconSize, profile.footerIconSize)
     batteryChargingTimeStack.addSpacer(3)
 
@@ -641,18 +630,6 @@ export async function createMediumWidget(config: Config, bl: Bluelink) {
     profile.footerGap,
   )
 
-  const titleStack = mainStack.addStack()
-  titleStack.layoutHorizontally()
-  titleStack.addSpacer(8)
-  const titleElement = titleStack.addText(`   ${title}`)
-  titleElement.textColor = primaryText
-  titleElement.textOpacity = darkMode ? 0.7 : 1
-  titleElement.font = Font.mediumSystemFont(25)
-  titleElement.minimumScaleFactor = 0.8
-  titleElement.lineLimit = 1
-  titleElement.leftAlignText()
-  mainStack.addSpacer(2)
-
   const contentRow = mainStack.addStack()
   contentRow.layoutHorizontally()
   contentRow.size = new Size(usableWidth, profile.contentRowHeight)
@@ -661,8 +638,16 @@ export async function createMediumWidget(config: Config, bl: Bluelink) {
   const mediaStack = contentRow.addStack()
   mediaStack.layoutVertically()
   mediaStack.size = new Size(mediaWidth, profile.contentRowHeight)
-  const actualImageWidth = Math.max(1, Math.min(profile.carImageWidth, mediaWidth - profile.mediaRightSafetyInset))
-  const actualImageHeight = actualImageWidth / (appIcon.size.width / appIcon.size.height)
+  const imageAspectRatio = appIcon.size.width / appIcon.size.height
+  const actualImageWidth = Math.max(
+    1,
+    Math.min(
+      profile.carImageWidth,
+      mediaWidth - profile.mediaRightSafetyInset,
+      profile.contentRowHeight * imageAspectRatio,
+    ),
+  )
+  const actualImageHeight = actualImageWidth / imageAspectRatio
   const leadingSlack = Math.max(0, mediaWidth - actualImageWidth - profile.mediaRightSafetyInset)
 
   mediaStack.addSpacer()
@@ -702,6 +687,22 @@ export async function createMediumWidget(config: Config, bl: Bluelink) {
   await addSummaryCell(leftCell, 'odometer', odometerText, 'left')
   await addSummaryCell(centerCell, 'last-update', lastUpdatedText, 'center')
   await addSummaryCell(rightCell, 'twelve-volt', `12V ${twelveText}`, 'right')
+
+  mainStack.addSpacer(6)
+  const actionRow = mainStack.addStack()
+  actionRow.layoutHorizontally()
+  actionRow.size = new Size(usableWidth, profile.actionRowHeight)
+  for (const action of widgetActions) {
+    const button = actionRow.addStack()
+    button.layoutHorizontally()
+    button.centerAlignContent()
+    button.size = new Size(usableWidth / widgetActions.length, profile.actionRowHeight)
+    button.url = getWidgetActionUrl(action)
+    button.addSpacer()
+    const icon = addWidgetIcon(button, action.icon, iconTint)
+    icon.imageSize = new Size(profile.actionIconSize, profile.actionIconSize)
+    button.addSpacer()
+  }
 
   return widget
 }
@@ -765,7 +766,7 @@ export async function createSmallWidget(config: Config, bl: Bluelink) {
   batteryPercentStack.centerAlignContent()
   if (supportsCharging) {
     const batteryIconColor = batteryPercent > 70 ? Color.green() : Color.red()
-    const batterySymbolElement = batteryPercentStack.addImage(await getWidgetIcon('twelve-volt', batteryIconColor))
+    const batterySymbolElement = addWidgetIcon(batteryPercentStack, 'twelve-volt', batteryIconColor)
     batterySymbolElement.imageSize = new Size(30, 22)
     const chargingIcon = supportsCharging ? getChargingIcon(isCharging, isPluggedIn, true) : undefined
     if (chargingIcon) {
@@ -913,7 +914,7 @@ export async function createHomeScreenRectangleWidget(config: Config, bl: Blueli
   batteryPercentStack.addSpacer()
   const chargingIcon = supportsCharging ? getChargingIcon(isCharging, isPluggedIn, true) : undefined
   if (chargingIcon) {
-    const chargingElement = batteryPercentStack.addImage(await getWidgetIcon(chargingIcon, new Color(primaryHex)))
+    const chargingElement = addWidgetIcon(batteryPercentStack, chargingIcon, new Color(primaryHex))
     chargingElement.imageSize = new Size(17, 17)
     chargingElement.rightAlignImage()
     batteryPercentStack.addSpacer(3)
